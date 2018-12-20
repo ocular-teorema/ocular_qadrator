@@ -1,0 +1,24 @@
+{
+	"port": 		1234,
+	"outputUrl1": 	"ws://localhost:20650",
+	"outputUrl2": 	"rtmp://localhost/live/test",
+	"outputWidth": 	320,
+	"outputHeight": 240,
+	"outputFps": 	16,
+	"outputCrf": 	23,
+	"borderWidth": 	2,
+	"numCamsX": 	2,
+	"numCamsY": 	1,
+    "camList": [
+        {
+            "name": "cam1",
+            "isPresent": true,
+            "streamUrl": "rtmp://fms.105.net:1935/live/rmc1"
+        },
+        {
+            "name": "cam2",
+            "isPresent": true,
+            "streamUrl": "rtmp://fms.105.net:1935/live/rmc1"
+        }
+    ]
+}
