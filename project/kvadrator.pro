@@ -8,6 +8,8 @@ CONFIG -= app_bundle
 
 TEMPLATE = app
 
+INCLUDEPATH += /usr/include
+
 SOURCES += ../src/main.cpp \
     ../src/errorHandler.cpp \
     ../src/frameBuffer.cpp \
