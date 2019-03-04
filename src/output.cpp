@@ -33,15 +33,15 @@ Output::Output(QString outputURL, int fps) :
 Output::~Output()
 {
     ERROR_MESSAGE0(ERR_TYPE_MESSAGE, "Output", "~Output() called");
-    if(NULL != m_pFormatCtx)
-    {
-        avformat_free_context(m_pFormatCtx);
-        m_pFormatCtx = NULL;
-    }
     if (NULL != m_pAVIOCtx) // note: the internal buffer could have changed, and be != pAvioCtxBuffer
     {
         av_freep(&m_pAVIOCtx->buffer);
         av_freep(&m_pAVIOCtx);
+    }
+    if(NULL != m_pFormatCtx)
+    {
+        avformat_free_context(m_pFormatCtx);
+        m_pFormatCtx = NULL;
     }
     avcodec_parameters_free(&m_pEncoderParams);
     delete pWebSocketServer;
@@ -55,14 +55,9 @@ void Output::OnWsConnected()
     qDebug() << "Connection established from " << pSocket->peerAddress().toString();
 
     connect(pSocket, SIGNAL(disconnected()), this, SLOT(OnWsDisconnected()));
-
     clients << pSocket;
-
     // Sent initial data
-    QByteArray array(4, 0);
-    memcpy(array.data(), &m_framerate, 4);
-    pSocket->sendBinaryMessage(array);
-
+    pSocket->sendBinaryMessage(initialFragments);
     qDebug() << "Number of active connections is " << clients.size();
 }
 
@@ -82,12 +77,38 @@ static int WritePacketCallback(void* opaque, uint8_t* buf, int size)
 {
     Output* pOutput = reinterpret_cast<Output*>(opaque);
 
-    // Byte array with frame's actual pts
-    QByteArray pts((char *)&pOutput->lastSentTimestamp, 8);
+    const uint8_t ftypTag[4] = {'f','t','y','p'};
+    const uint8_t moovTag[4] = {'m','o','o','v'};
+    const uint8_t sidxTag[4] = {'s','i','d','x'};
+    const uint8_t moofTag[4] = {'m','o','o','f'};
 
-    Q_FOREACH (QWebSocket* client, pOutput->clients)
+    if (size < 8)
     {
-        client->sendBinaryMessage(QByteArray((char *)buf, size).append(pts));
+        ERROR_MESSAGE0(ERR_TYPE_MESSAGE, "Output", "Too short fragment passed to callback");
+    }
+
+    // FTYP
+    if (!memcmp(buf + 4, ftypTag, 4))
+    {
+        pOutput->initialFragments.clear();
+        pOutput->initialFragments.append(QByteArray((char *)buf, size));
+    }
+    // MOOV
+    else if (!memcmp(buf + 4, moovTag, 4))
+    {
+        pOutput->initialFragments.append(QByteArray((char *)buf, size));
+    }
+    // MOOF (or sidx+moov)
+    else if (!memcmp(buf + 4, moofTag, 4) || !memcmp(buf + 4, sidxTag, 4))
+    {
+        Q_FOREACH (QWebSocket* client, pOutput->clients)
+        {
+            client->sendBinaryMessage(QByteArray((char *)buf, size));
+        }
+    }
+    else
+    {
+        ERROR_MESSAGE0(ERR_TYPE_MESSAGE, "Output", "Unsupported fragment type received");
     }
     return size;
 }
@@ -120,7 +141,7 @@ void Output::Open(AVCodecParameters* pCodecParams)
     }
     else if (m_outputUrl.startsWith("ws"))
     {
-        avformat_alloc_output_context2(&m_pFormatCtx, NULL, NULL, "out.h264");
+        avformat_alloc_output_context2(&m_pFormatCtx, NULL, "mp4", "out.mp4");
     }
     else
     {
@@ -167,22 +188,6 @@ void Output::Open(AVCodecParameters* pCodecParams)
 
         // Set encoding parameters
         avcodec_parameters_copy(m_pVideoStream->codecpar, pCodecParams);
-
-        // Open bitstream filter
-        if (0 != av_bsf_alloc(av_bsf_get_by_name("h264_mp4toannexb"), &m_pH264bsf))
-        {
-            ERROR_MESSAGE0(ERR_TYPE_ERROR, "ResultVideoOutput", "Could not allocate bitstream filter");
-            return;
-        }
-
-        avcodec_parameters_copy(m_pH264bsf->par_in, pCodecParams);
-        m_pH264bsf->time_base_in = m_pVideoStream->time_base;
-
-        if (0 != av_bsf_init(m_pH264bsf))
-        {
-            ERROR_MESSAGE0(ERR_TYPE_ERROR, "Output", "Could not initialize bitstream filter");
-            return;
-        }
     }
     else
     {
@@ -207,6 +212,22 @@ void Output::Open(AVCodecParameters* pCodecParams)
             ERROR_MESSAGE0(ERR_TYPE_ERROR, "Output", "Failed to open avio for writing");
             return;
         }
+
+        ERROR_MESSAGE1(ERR_TYPE_MESSAGE, "Output", "Extradata size before avformat_write_header() is %d bytes",
+                       m_pVideoStream->codecpar->extradata_size);
+    }
+
+    AVDictionary* opts(0);
+
+    if (m_outputUrl.startsWith("ws"))
+    {
+        av_dict_set(&opts, "movflags", "empty_moov+dash+default_base_moof+frag_keyframe", 0);
+    }
+
+    if (0 > avformat_write_header(m_pFormatCtx, &opts))
+    {
+        ERROR_MESSAGE0(ERR_TYPE_ERROR, "ResultVideoOutput", "avformat_write_header() failed");
+        return;
     }
 
     // Printf format informtion
@@ -289,23 +310,15 @@ void Output::WritePacket(QSharedPointer<AVPacket> pInPacket)
         return;
     }
 
-    // Waiting for key frame to start file
-    if ((AV_NOPTS_VALUE == m_firstDts) && !(pInPacket->flags & AV_PKT_FLAG_KEY))
+    if (AV_NOPTS_VALUE == m_firstDts)
     {
-        return;
+        m_firstDts = pInPacket->dts;
     }
 
-    if ((AV_NOPTS_VALUE == m_firstDts) && (pInPacket->flags & AV_PKT_FLAG_KEY))
+    if (pInPacket->flags & AV_PKT_FLAG_KEY)
     {
         // Write format header to file
         FillSPSPPS(m_pVideoStream->codecpar, pInPacket->data, pInPacket->size);
-
-        if (0 > avformat_write_header(m_pFormatCtx, NULL))
-        {
-            ERROR_MESSAGE0(ERR_TYPE_ERROR, "Output", "avformat_write_header() failed");
-            return;
-        }
-        m_firstDts = pInPacket->dts;
     }
 
     // Clone packet because it is ref-counted and will be unrefed in av_interleaved_write_frame
@@ -314,23 +327,10 @@ void Output::WritePacket(QSharedPointer<AVPacket> pInPacket)
     pPacket->dts -= m_firstDts;
     pPacket->pts -= m_firstDts;
     av_packet_rescale_ts(pPacket, AV_TIME_BASE_Q, m_pVideoStream->time_base);
-
-    // Store frame timestamp
-    // We are strongly counting on single call of WritePacketCallback
-    // per each av_interleaved_write_frame() call
-    lastSentTimestamp = pPacket->pts;
-
-    if (m_pH264bsf != NULL)
-    {
-        av_bsf_send_packet(m_pH264bsf, pPacket);
-        av_bsf_receive_packet(m_pH264bsf, pPacket);
-    }
-
     int res = av_interleaved_write_frame(m_pFormatCtx, pPacket); // this call should also unref passed avpacket
+    av_free_packet(pPacket);
     if (res < 0)
     {
-        av_packet_unref(pPacket);
-
         char err[255] = {0};
         av_make_error_string(err, 255, res);
         ERROR_MESSAGE1(ERR_TYPE_ERROR, "Output", "av_interleaved_write_frame() error: %s", err);
@@ -354,7 +354,7 @@ void Output::Close()
     if (m_outputInitialized)
     {
         av_write_trailer(m_pFormatCtx);
-        if (m_pFormatCtx && !(m_pFormatCtx->oformat->flags & AVFMT_NOFILE))
+        if (m_pFormatCtx && !(m_pFormatCtx->flags & AVFMT_FLAG_CUSTOM_IO))
         {
             avio_closep(&m_pFormatCtx->pb);
         }
