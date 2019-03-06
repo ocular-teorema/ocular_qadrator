@@ -212,24 +212,7 @@ void Output::Open(AVCodecParameters* pCodecParams)
             ERROR_MESSAGE0(ERR_TYPE_ERROR, "Output", "Failed to open avio for writing");
             return;
         }
-
-        ERROR_MESSAGE1(ERR_TYPE_MESSAGE, "Output", "Extradata size before avformat_write_header() is %d bytes",
-                       m_pVideoStream->codecpar->extradata_size);
     }
-
-    AVDictionary* opts(0);
-
-    if (m_outputUrl.startsWith("ws"))
-    {
-        av_dict_set(&opts, "movflags", "empty_moov+dash+default_base_moof+frag_keyframe", 0);
-    }
-
-    if (0 > avformat_write_header(m_pFormatCtx, &opts))
-    {
-        ERROR_MESSAGE0(ERR_TYPE_ERROR, "ResultVideoOutput", "avformat_write_header() failed");
-        return;
-    }
-
     // Printf format informtion
     av_dump_format(m_pFormatCtx, 0, m_outputUrl.toUtf8().constData(), 1);
 
@@ -310,15 +293,31 @@ void Output::WritePacket(QSharedPointer<AVPacket> pInPacket)
         return;
     }
 
-    if (AV_NOPTS_VALUE == m_firstDts)
+    // Wait for keyframe to start
+    if (AV_NOPTS_VALUE == m_firstDts && !(pInPacket->flags & AV_PKT_FLAG_KEY))
     {
-        m_firstDts = pInPacket->dts;
+        return;
     }
 
-    if (pInPacket->flags & AV_PKT_FLAG_KEY)
+    if (AV_NOPTS_VALUE == m_firstDts && (pInPacket->flags & AV_PKT_FLAG_KEY))
     {
+        m_firstDts = pInPacket->dts;
+
         // Write format header to file
         FillSPSPPS(m_pVideoStream->codecpar, pInPacket->data, pInPacket->size);
+
+        AVDictionary* opts(0);
+
+        if (m_outputUrl.startsWith("ws"))
+        {
+            av_dict_set(&opts, "movflags", "empty_moov+dash+default_base_moof+frag_keyframe", 0);
+        }
+
+        if (0 > avformat_write_header(m_pFormatCtx, &opts))
+        {
+            ERROR_MESSAGE0(ERR_TYPE_ERROR, "ResultVideoOutput", "avformat_write_header() failed");
+            return;
+        }
     }
 
     // Clone packet because it is ref-counted and will be unrefed in av_interleaved_write_frame
