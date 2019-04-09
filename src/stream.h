@@ -8,6 +8,8 @@
 #include <QThread>
 #include <QObject>
 
+#define READ_TIMEOUT_MSEC 20000
+
 class Stream : public QObject
 {
     Q_OBJECT
@@ -16,6 +18,8 @@ public:
     ~Stream();
 
     bool    Initialize();
+
+    int64_t lastFrameReadMs;
 
 signals:
     void    FrameReady(QSharedPointer<AVFrame> pNewFrame);

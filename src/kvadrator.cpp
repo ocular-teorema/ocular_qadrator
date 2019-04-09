@@ -68,7 +68,8 @@ bool Kvadrator::Initialize()
                                          m_params.builder.camHeight);
             // Connect thread slots
             QObject::connect(thread, SIGNAL(started()),  stream, SLOT(StartCapture()));
-            QObject::connect(thread, SIGNAL(finished()), stream, SLOT(Deinitialize()));
+            QObject::connect(thread, SIGNAL(finished()), stream, SLOT(deleteLater()));
+            QObject::connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
 
             // Move each stream to its own thread
             stream->moveToThread(thread);
@@ -100,9 +101,6 @@ void Kvadrator::Deinitialize()
     delete pBuilder;
     delete pOutput1;
     delete pOutput2;
-
-    for (int i = 0; i < streamThreads.size(); i++)
-        delete streamThreads[i];
 
     streams.clear();
     frameBufferPtrs.clear();

@@ -67,7 +67,7 @@ void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int row, int col
 {
     if (pFrame.isNull())
     {
-        ERROR_MESSAGE0(ERR_TYPE_ERROR, "Builder", "Null frame received from frame buffer");
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Builder", "Null frame received from frame buffer %d", col*m_params.numCamsX + row);
         return;
     }
 

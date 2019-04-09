@@ -2,9 +2,11 @@
 #include "stream.h"
 
 #include <QUrl>
+#include <QDateTime>
 
 Stream::Stream(QString name, QString inputUrl, int targetWidth, int targetHeight) :
     QObject(NULL),
+    lastFrameReadMs(0),
     m_name(name),
     m_inputUrl(inputUrl),
     m_targetWidth(targetWidth),
@@ -19,28 +21,43 @@ Stream::Stream(QString name, QString inputUrl, int targetWidth, int targetHeight
 Stream::~Stream()
 {
     ERROR_MESSAGE0(ERR_TYPE_MESSAGE, "Stream", "~Stream() called");
+    Deinitialize();
+}
+
+int AvReadFrameCallback(void *opaque)
+{
+    int64_t lastReadMs = ((Stream*)opaque)->lastFrameReadMs;
+    if ((lastReadMs > 0) && (READ_TIMEOUT_MSEC < (QDateTime::currentMSecsSinceEpoch() - lastReadMs)))
+    {
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "%d sec timeout hit", READ_TIMEOUT_MSEC/1000);
+        return 1;
+    }
+    return 0;
 }
 
 bool Stream::Initialize()
 {
     int             res;
-    QUrl            testUrl(m_inputUrl);
-    AVDictionary*   inputOptions(0);
     AVCodec*        pCodec;
 
-    if(!testUrl.isValid())
+    if(!QUrl(m_inputUrl).isValid())
     {
-        ERROR_MESSAGE0(ERR_TYPE_ERROR, "Stream", "Invalid url");
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "Invalid url %s", m_inputUrl.toUtf8().constData());
         return false;
     }
 
-    av_dict_set(&inputOptions, "rtsp_transport", "tcp", 0);
-    res = avformat_open_input(&m_pInputContext, m_inputUrl.toLatin1().data(), NULL, &inputOptions);
-    av_dict_free(&inputOptions);
+    m_pInputContext = avformat_alloc_context();
+    m_pInputContext->interrupt_callback.opaque = (void*)this;
+    m_pInputContext->interrupt_callback.callback = &AvReadFrameCallback;
+    m_pInputContext->flags |= AVFMT_FLAG_NONBLOCK;
+    lastFrameReadMs = QDateTime::currentMSecsSinceEpoch();
 
+    res = avformat_open_input(&m_pInputContext, m_inputUrl.toLatin1().data(), NULL, NULL);
     if (res < 0)
     {
-        ERROR_MESSAGE0(ERR_TYPE_ERROR, "Stream", "Failed to open stream");
+        char err[255];
+        av_make_error_string(err, 255, res);
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "Failed to open stream: %s", err);
         return false;
     }
 
@@ -109,6 +126,7 @@ bool Stream::Initialize()
     m_stop = false;
     m_readErrors = 0;
     m_decodeErrors = 0;
+    lastFrameReadMs = 0;
 
     return true;
 }
@@ -163,6 +181,10 @@ void Stream::CaptureNewFrame()
             }
             // Exit reading while
             av_packet_unref(&packet);
+
+            // Set last successful read time
+            lastFrameReadMs = QDateTime::currentMSecsSinceEpoch();
+
             break;
         }
         av_packet_unref(&packet);
@@ -197,7 +219,7 @@ void Stream::CaptureNewFrame()
 
             // Try to reonnect to the stream
             Deinitialize();
-            Initialize();
+            while (!Initialize());
             emit Reinit();
             m_pCaptureTimer->start();
         }
@@ -215,7 +237,7 @@ void Stream::CaptureNewFrame()
 
             // Try to reonnect to the stream
             Deinitialize();
-            Initialize();
+            while (!Initialize());
             emit Reinit();
             m_pCaptureTimer->start();
         }

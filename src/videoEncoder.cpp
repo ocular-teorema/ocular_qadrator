@@ -97,24 +97,21 @@ void VideoEncoder::EncodeFrame(AVFrame *pFrame)
     {
         int  encodeRes = 0;
         int  recvRes = 0;
-
-        QSharedPointer<AVPacket> pPacket(av_packet_alloc(), [](AVPacket *pkt){av_packet_free(&pkt);});
+        AVPacket* pkt = av_packet_alloc();
 
         // Increment pts
         pFrame->pts = m_currentPts++;
 
         encodeRes = avcodec_send_frame(m_pCodecContext, pFrame);
-        recvRes = avcodec_receive_packet(m_pCodecContext, pPacket.data()); // Generates ref-counted packet
+        recvRes = avcodec_receive_packet(m_pCodecContext, pkt); // Generates ref-counted packet
 
         if (!encodeRes && !recvRes)
         {
             // Packet duration is always 1 in 1/fps timebase
-            pPacket->duration = 1;
-
-            av_packet_rescale_ts(pPacket.data(), m_pCodecContext->time_base, AV_TIME_BASE_Q);
-
+            pkt->duration = 1;
+            av_packet_rescale_ts(pkt, m_pCodecContext->time_base, AV_TIME_BASE_Q);
             DEBUG_MESSAGE0("VideoEncoder", "PacketReady() emitted. packet");
-            emit PacketReady(pPacket);
+            emit PacketReady(QSharedPointer<AVPacket>(pkt, [](AVPacket *p){av_packet_free(&p);}));
         }
         else
         {

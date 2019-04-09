@@ -9,7 +9,8 @@ Output::Output(QString outputURL, int fps) :
     m_numErrorsInRow(0),
     m_pH264bsf(NULL),
     m_pFormatCtx(NULL),
-    m_pVideoStream(NULL)
+    m_pVideoStream(NULL),
+    m_pAVIOCtx(NULL)
 {
     m_pEncoderParams = avcodec_parameters_alloc();
 
@@ -327,7 +328,7 @@ void Output::WritePacket(QSharedPointer<AVPacket> pInPacket)
     pPacket->pts -= m_firstDts;
     av_packet_rescale_ts(pPacket, AV_TIME_BASE_Q, m_pVideoStream->time_base);
     int res = av_interleaved_write_frame(m_pFormatCtx, pPacket); // this call should also unref passed avpacket
-    av_free_packet(pPacket);
+    av_packet_free(&pPacket);
     if (res < 0)
     {
         char err[255] = {0};
