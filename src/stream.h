@@ -28,7 +28,7 @@ signals:
 public slots:
     void    Deinitialize();
     void    CaptureNewFrame();
-    void    StartCapture() { if (!Initialize()) return; m_pCaptureTimer->start(); }
+    void    StartCapture() { while (!Initialize() && !m_stop); m_pCaptureTimer->start(); }
     void    StopCapture() { m_stop = true; m_pCaptureTimer->stop(); }
 
 private:
@@ -45,8 +45,7 @@ private:
     AVCodecContext*     m_pCodecContext;
     AVFrame*            m_pFrame;           /// Decoded frame locates here
     int                 m_videoStreamIndex;
-    int                 m_readErrors;       /// Number of read frame error in a row
-    int                 m_decodeErrors;     /// Number of read frame error in a row
+    int                 m_errorsInRow;      /// Number of read or decode errors in a row
     bool                m_stop;             /// Flag to exit from while loop
 
     QSharedPointer<AVFrame> ScaleFrame(AVFrame* pInFrame);

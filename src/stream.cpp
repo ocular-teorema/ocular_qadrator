@@ -9,11 +9,14 @@ Stream::Stream(QString name, QString inputUrl, int targetWidth, int targetHeight
     lastFrameReadMs(0),
     m_name(name),
     m_inputUrl(inputUrl),
+    m_pCaptureTimer(NULL),
     m_targetWidth(targetWidth),
     m_targetHeight(targetHeight),
     m_pInputContext(NULL),
     m_pCodecContext(NULL),
-    m_pFrame(NULL)
+    m_pFrame(NULL),
+    m_errorsInRow(0),
+    m_stop(false)
 {
 
 }
@@ -45,6 +48,9 @@ bool Stream::Initialize()
         ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "Invalid url %s", m_inputUrl.toUtf8().constData());
         return false;
     }
+
+    // Close all previously opened stuff if needed
+    Deinitialize();
 
     m_pInputContext = avformat_alloc_context();
     m_pInputContext->interrupt_callback.opaque = (void*)this;
@@ -124,8 +130,7 @@ bool Stream::Initialize()
     QObject::connect(m_pCaptureTimer, SIGNAL(timeout()), this, SLOT(CaptureNewFrame()));
 
     m_stop = false;
-    m_readErrors = 0;
-    m_decodeErrors = 0;
+    m_errorsInRow = 0;
     lastFrameReadMs = 0;
 
     return true;
@@ -133,8 +138,12 @@ bool Stream::Initialize()
 
 void Stream::Deinitialize()
 {
-    m_pCaptureTimer->stop();
-    delete m_pCaptureTimer;
+    if (NULL != m_pCaptureTimer)
+    {
+        m_pCaptureTimer->stop();
+        delete m_pCaptureTimer;
+        m_pCaptureTimer = NULL;
+    }
 
     if(NULL != m_pFrame)
     {
@@ -191,9 +200,9 @@ void Stream::CaptureNewFrame()
     }
 
     // Add all decoded frames to frame buffer
-    if (decodeRes == 0)
+    if ((readRes == 0) && (decodeRes == 0))
     {
-        m_decodeErrors = 0;
+        m_errorsInRow = 0;
 
         if (m_pFrame->format != AV_PIX_FMT_YUV420P && m_pFrame->format != AV_PIX_FMT_YUVJ420P)
         {
@@ -213,38 +222,22 @@ void Stream::CaptureNewFrame()
     }
     else
     {
-        if (++m_decodeErrors > 300 && !m_stop)
-        {
-            ERROR_MESSAGE1(ERR_TYPE_CRITICAL, "Stream", "Stream %s 300 decode frame errors in a row", m_name.toUtf8().constData());
+        char err1[255];
+        char err2[255];
+        av_make_error_string(err1, 255, readRes);
+        av_make_error_string(err2, 255, decodeRes);
+        ERROR_MESSAGE3(ERR_TYPE_ERROR, "Stream", "Stream %s   read: %s    decode: %s", m_name.toUtf8().constData(), err1, err2);
 
+        if (++m_errorsInRow > 300 && !m_stop)
+        {
+            ERROR_MESSAGE1(ERR_TYPE_CRITICAL, "Stream", "Stream %s 300 errors in a row", m_name.toUtf8().constData());
             // Try to reonnect to the stream
-            Deinitialize();
-            while (!Initialize());
+            while (!Initialize()) {
+                ERROR_MESSAGE1(ERR_TYPE_MESSAGE, "Stream", "Stream %s reinitializing...", m_name.toUtf8().constData());
+            };
             emit Reinit();
             m_pCaptureTimer->start();
         }
-    }
-
-    if (readRes < 0)
-    {
-        char err[255];
-        av_make_error_string(err, 255, readRes);
-        ERROR_MESSAGE2(ERR_TYPE_MESSAGE, "Stream", "Stream %s read frame error: %s", m_name.toUtf8().constData(), err);
-
-        if (++m_readErrors > 300 && !m_stop)
-        {
-            ERROR_MESSAGE1(ERR_TYPE_CRITICAL, "Stream", "Stream %s 300 read frame errors in a row", m_name.toUtf8().constData());
-
-            // Try to reonnect to the stream
-            Deinitialize();
-            while (!Initialize());
-            emit Reinit();
-            m_pCaptureTimer->start();
-        }
-    }
-    else
-    {
-        m_readErrors = 0;
     }
 }
 
