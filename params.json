@@ -1,23 +1,30 @@
 {
-	"port": 		1234,
 	"outputUrl1": 	"ws://localhost:20650",
 	"outputUrl2": 	"rtmp://localhost/live/test",
-	"outputWidth": 	320,
-	"outputHeight": 240,
+	"outputWidth": 	640,
+	"outputHeight": 480,
 	"outputFps": 	16,
 	"outputCrf": 	23,
-	"borderWidth": 	2,
-	"numCamsX": 	2,
-	"numCamsY": 	1,
     "camList": [
         {
-            "name": "cam1",
-            "isPresent": true,
+            "posX": 0,
+            "posY": 0,
+            "width": 4,
+            "height": 4,
             "streamUrl": "rtmp://fms.105.net:1935/live/rmc1"
         },
         {
-            "name": "cam2",
-            "isPresent": true,
+            "posX": 4,
+            "posY": 0,
+            "width": 4,
+            "height": 4,
+            "streamUrl": "rtmp://fms.105.net:1935/live/rmc1"
+        },
+        {
+            "posX": 3,
+            "posY": 5,
+            "width": 2,
+            "height": 2,
             "streamUrl": "rtmp://fms.105.net:1935/live/rmc1"
         }
     ]

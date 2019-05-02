@@ -14,7 +14,7 @@ class Stream : public QObject
 {
     Q_OBJECT
 public:
-    Stream(QString name, QString inputUrl, int targetWidth, int targetHeight);
+    Stream(QString inputUrl, int targetWidth, int targetHeight);
     ~Stream();
 
     bool    Initialize();
@@ -32,7 +32,6 @@ public slots:
     void    StopCapture() { m_stop = true; m_pCaptureTimer->stop(); }
 
 private:
-    QString     m_name;             /// Stream name
     QString     m_inputUrl;         /// Input stream url
     QTimer*     m_pCaptureTimer;    /// Main loop timer. It will call CaptureNewFrame()
                                     /// as often as possible and keep all events alive.

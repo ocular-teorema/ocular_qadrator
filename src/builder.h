@@ -10,18 +10,22 @@
 #include "frameBuffer.h"
 #include "videoEncoder.h"
 
+struct CamDescr
+{
+    int posX;
+    int posY;
+    int width;
+    int height;
+    QString streamUrl;
+};
 
 struct BuilderParameters
 {
     int  outWidth;
     int  outHeight;
-    int  camWidth;
-    int  camHeight;
-    int  borderWidth;
     int  fps;
     int  crf;
-    int  numCamsX;
-    int  numCamsY;
+    QVector<CamDescr> camList;
 };
 
 class Builder : public QObject
@@ -50,7 +54,7 @@ private:
     AVFrame*            m_pResultFrame;
     QTimer*             m_pProcessingTimer;
 
-    void DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int row, int col);
+    void DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int idx);
 };
 
 #endif // BUILDER_H

@@ -17,27 +17,15 @@ public:
     Kvadrator();
     ~Kvadrator();
 
-    struct CamDesc
-    {
-        bool    isPresent;
-        QString name;
-        QString streamUrl;
-    };
-
     struct Parameters
     {
-        Parameters() { parsed = false; }
+        Parameters() { parsed = false; numCams = 0; }
 
         bool                parsed;
 
-        int                 port;
+        int                 numCams;
         QString             outputUrl1;
         QString             outputUrl2;
-
-        int                 numCamsX;
-        int                 numCamsY;
-
-        QVector<CamDesc>    camDescriptors;
 
         BuilderParameters   builder;
     };

@@ -4,10 +4,9 @@
 #include <QUrl>
 #include <QDateTime>
 
-Stream::Stream(QString name, QString inputUrl, int targetWidth, int targetHeight) :
+Stream::Stream(QString inputUrl, int targetWidth, int targetHeight) :
     QObject(NULL),
     lastFrameReadMs(0),
-    m_name(name),
     m_inputUrl(inputUrl),
     m_pCaptureTimer(NULL),
     m_targetWidth(targetWidth),
@@ -206,7 +205,7 @@ void Stream::CaptureNewFrame()
 
         if (m_pFrame->format != AV_PIX_FMT_YUV420P && m_pFrame->format != AV_PIX_FMT_YUVJ420P)
         {
-            ERROR_MESSAGE1(ERR_TYPE_DISPOSABLE, "Stream", "Stream %s unsupported frame format", m_name.toUtf8().constData());
+            ERROR_MESSAGE1(ERR_TYPE_DISPOSABLE, "Stream", "Stream %s unsupported frame format", m_inputUrl.toUtf8().constData());
             return;
         }
 
@@ -226,14 +225,14 @@ void Stream::CaptureNewFrame()
         char err2[255];
         av_make_error_string(err1, 255, readRes);
         av_make_error_string(err2, 255, decodeRes);
-        ERROR_MESSAGE3(ERR_TYPE_ERROR, "Stream", "Stream %s   read: %s    decode: %s", m_name.toUtf8().constData(), err1, err2);
+        ERROR_MESSAGE3(ERR_TYPE_ERROR, "Stream", "Stream %s   read: %s    decode: %s", m_inputUrl.toUtf8().constData(), err1, err2);
 
         if (++m_errorsInRow > 300 && !m_stop)
         {
-            ERROR_MESSAGE1(ERR_TYPE_CRITICAL, "Stream", "Stream %s 300 errors in a row", m_name.toUtf8().constData());
+            ERROR_MESSAGE1(ERR_TYPE_CRITICAL, "Stream", "Stream %s 300 errors in a row", m_inputUrl.toUtf8().constData());
             // Try to reonnect to the stream
             while (!Initialize()) {
-                ERROR_MESSAGE1(ERR_TYPE_MESSAGE, "Stream", "Stream %s reinitializing...", m_name.toUtf8().constData());
+                ERROR_MESSAGE1(ERR_TYPE_MESSAGE, "Stream", "Stream %s reinitializing...", m_inputUrl.toUtf8().constData());
             };
             emit Reinit();
             m_pCaptureTimer->start();
@@ -261,7 +260,7 @@ QSharedPointer<AVFrame> Stream::ScaleFrame(AVFrame *pInFrame)
 
     if (0 > av_frame_get_buffer(pOutFrame.data(), 0))  // allocates aligned buffer for y,u,v planes
     {
-        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "Stream %s Failed to alocate frame buffer", m_name.toUtf8().constData());
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Stream", "Stream %s Failed to alocate frame buffer", m_inputUrl.toUtf8().constData());
         return QSharedPointer<AVFrame>(NULL);
     }
 

@@ -49,32 +49,20 @@ void Builder::BuildFrame()
     memset(m_pResultFrame->data[1], 128,  (m_pResultFrame->height >> 1) * m_pResultFrame->linesize[1]);
     memset(m_pResultFrame->data[2], 128,  (m_pResultFrame->height >> 1) * m_pResultFrame->linesize[1]);
 
-    for (int camY = 0; camY < m_params.numCamsY; camY++)
+    for (int i = 0; i < m_params.camList.size(); i++)
     {
-        for (int camX = 0; camX < m_params.numCamsX; camX++)
-        {
-            // If we have source for current position - read frame from it
-            if (!sources[camY*m_params.numCamsX + camX].isNull())
-            {
-                DrawFrameOnTarget(sources[camY*m_params.numCamsX + camX]->GetFrame(timeSpan), camX, camY);
-            }
-        }
+        DrawFrameOnTarget(sources[i]->GetFrame(timeSpan), i);
     }
     emit FrameBuilt(m_pResultFrame);
 }
 
-void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int row, int col)
+void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int idx)
 {
     if (pFrame.isNull())
     {
-        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Builder", "Null frame received from frame buffer %d", col*m_params.numCamsX + row);
+        ERROR_MESSAGE1(ERR_TYPE_ERROR, "Builder", "Null frame received from frame buffer %d", idx);
         return;
     }
-
-//    int posX = m_params.camWidth  * row + m_params.borderWidth * (row + 1);
-//    int posY = m_params.camHeight * col + m_params.borderWidth * (col + 1);
-    int posX = m_params.camWidth  * row + ((m_params.camWidth - pFrame->width) >> 1);
-    int posY = m_params.camHeight * col + ((m_params.camHeight - pFrame->height) >> 1);
 
     cv::Mat     dstY(m_pResultFrame->height,    m_pResultFrame->width,    CV_8UC1, m_pResultFrame->data[0], m_pResultFrame->linesize[0]);
     cv::Mat     dstU(m_pResultFrame->height>>1, m_pResultFrame->width>>1, CV_8UC1, m_pResultFrame->data[1], m_pResultFrame->linesize[1]);
@@ -83,6 +71,9 @@ void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int row, int col
     cv::Mat     srcY(pFrame->height,    pFrame->width,    CV_8UC1, pFrame->data[0], pFrame->linesize[0]);
     cv::Mat     srcU(pFrame->height>>1, pFrame->width>>1, CV_8UC1, pFrame->data[1], pFrame->linesize[1]);
     cv::Mat     srcV(pFrame->height>>1, pFrame->width>>1, CV_8UC1, pFrame->data[2], pFrame->linesize[1]);
+
+    int posX = m_params.camList[idx].posX;
+    int posY = m_params.camList[idx].posY;
 
     srcY.copyTo(dstY(cv::Rect(posX, posY, pFrame->width, pFrame->height)));
     srcU.copyTo(dstU(cv::Rect(posX>>1, posY>>1, pFrame->width>>1, pFrame->height>>1)));
