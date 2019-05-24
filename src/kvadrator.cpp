@@ -155,11 +155,11 @@ bool Kvadrator::ParseParams(QJsonDocument paramsJsonDoc)
         desc.height = obj["height"].toInt();
         desc.streamUrl  = obj["streamUrl"].toString();
 
-        // Convert pos and size to real output resolution
-        desc.posX *= params.builder.outWidth >> 3;
-        desc.posY *= params.builder.outHeight >> 3;
-        desc.width *= params.builder.outWidth >> 3;
-        desc.height *= params.builder.outHeight >> 3;
+//        // Convert pos and size to real output resolution
+//        desc.posX *= params.builder.outWidth >> 3;
+//        desc.posY *= params.builder.outHeight >> 3;
+//        desc.width *= params.builder.outWidth >> 3;
+//        desc.height *= params.builder.outHeight >> 3;
 
         params.builder.camList.append(desc);
     }
