@@ -213,7 +213,8 @@ void Stream::CaptureNewFrame()
 
         m_pFrame->pkt_dts = av_rescale_q(m_pFrame->pkt_dts, inTimeBase, AV_TIME_BASE_Q);
         m_pFrame->best_effort_timestamp = av_rescale_q(m_pFrame->best_effort_timestamp, inTimeBase, AV_TIME_BASE_Q);
-
+        m_pFrame->best_effort_timestamp = (m_pFrame->best_effort_timestamp == AV_NOPTS_VALUE) ?
+                                           m_pFrame->pkt_dts : m_pFrame->best_effort_timestamp;
         emit FrameReady(ScaleFrame(m_pFrame));
 
         // Free decoded frame data

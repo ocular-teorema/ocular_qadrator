@@ -8,6 +8,7 @@ FrameBuffer::FrameBuffer()
     m_totalWritten = 0;
     m_size = FRAME_BUFFER_DEFAULT_SIZE;
     m_lastFrameTs = INT64_MAX;
+    m_repeatedFrames = 0;
 
     m_buffer.resize(m_size);
     m_buffer.setSharable(true);
@@ -28,34 +29,33 @@ QSharedPointer<AVFrame> FrameBuffer::GetFrame(int64_t timeSpanMicros)
 
     if (numFramesInBuf > 0)
     {
-        int64_t  curTs = (m_buffer[m_readIndex]->best_effort_timestamp == AV_NOPTS_VALUE) ?
-                 m_buffer[m_readIndex]->pkt_dts : m_buffer[m_readIndex]->best_effort_timestamp;
+        int64_t  curTs = m_buffer[m_readIndex]->best_effort_timestamp;
 
         while (--numFramesInBuf && (curTs < (m_lastFrameTs + timeSpanMicros)))
         {
             m_readIndex = (m_readIndex + 1) % m_size;
             m_totalRead++;
-
-            curTs = (m_buffer[m_readIndex]->best_effort_timestamp == AV_NOPTS_VALUE) ?
-                     m_buffer[m_readIndex]->pkt_dts : m_buffer[m_readIndex]->best_effort_timestamp;
+            curTs = m_buffer[m_readIndex]->best_effort_timestamp;
         }
 
-        m_lastFrameTs = curTs;
+        if (m_lastFrameTs == curTs)
+        {
+            if (++m_repeatedFrames > REPEAT_FRAMES_MAX)
+            {
+                ERROR_MESSAGE0(ERR_TYPE_ERROR, "FrameBuffer", "Frame repeated too many times");
+                return QSharedPointer<AVFrame>(NULL);
+            }
+        }
+        else
+        {
+            m_repeatedFrames = 0;
+            m_lastFrameTs = curTs;
+        }
         return m_buffer[m_readIndex];
     }
     else
     {
-        if (m_totalWritten)
-        {
-            int lastWrittenIndex = (m_writeIndex == 0) ? (m_size - 1) : (m_writeIndex - 1);
-            m_lastFrameTs = (m_buffer[lastWrittenIndex]->best_effort_timestamp == AV_NOPTS_VALUE) ?
-                     m_buffer[lastWrittenIndex]->pkt_dts : m_buffer[lastWrittenIndex]->best_effort_timestamp;
-            return m_buffer[lastWrittenIndex];
-        }
-        else
-        {
-            return QSharedPointer<AVFrame>(NULL);
-        }
+        return QSharedPointer<AVFrame>(NULL);
     }
 }
 

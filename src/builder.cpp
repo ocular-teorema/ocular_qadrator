@@ -72,8 +72,9 @@ void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int idx)
     cv::Mat     srcU(pFrame->height>>1, pFrame->width>>1, CV_8UC1, pFrame->data[1], pFrame->linesize[1]);
     cv::Mat     srcV(pFrame->height>>1, pFrame->width>>1, CV_8UC1, pFrame->data[2], pFrame->linesize[1]);
 
-    int posX = m_params.camList[idx].posX;
-    int posY = m_params.camList[idx].posY;
+    // Aligned to center of Rect(posX, posY, posX + width, posY + height)
+    int posX = m_params.camList[idx].posX + ((m_params.camList[idx].width - pFrame->width)>>1);
+    int posY = m_params.camList[idx].posY + ((m_params.camList[idx].height - pFrame->height)>>1);
 
     srcY.copyTo(dstY(cv::Rect(posX, posY, pFrame->width, pFrame->height)));
     srcU.copyTo(dstU(cv::Rect(posX>>1, posY>>1, pFrame->width>>1, pFrame->height>>1)));
