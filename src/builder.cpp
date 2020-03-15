@@ -42,8 +42,6 @@ Builder::~Builder()
 
 void Builder::BuildFrame()
 {
-    int64_t timeSpan = 1000000 / m_params.fps;
-
     // Make current frame black first
     memset(m_pResultFrame->data[0], 16, m_pResultFrame->height * m_pResultFrame->linesize[0]);
     memset(m_pResultFrame->data[1], 128,  (m_pResultFrame->height >> 1) * m_pResultFrame->linesize[1]);
@@ -56,7 +54,7 @@ void Builder::BuildFrame()
             // If we have source for current position - read frame from it
             if (!sources[camY*m_params.numCamsX + camX].isNull())
             {
-                DrawFrameOnTarget(sources[camY*m_params.numCamsX + camX]->GetFrame(timeSpan), camX, camY);
+                DrawFrameOnTarget(sources[camY*m_params.numCamsX + camX]->GetFrame(), camX, camY);
             }
         }
     }
@@ -65,7 +63,7 @@ void Builder::BuildFrame()
 
 void Builder::DrawFrameOnTarget(QSharedPointer<AVFrame> pFrame, int row, int col)
 {
-    if (pFrame.isNull())
+    if (nullptr == pFrame)
     {
         ERROR_MESSAGE1(ERR_TYPE_ERROR, "Builder", "Null frame received from frame buffer %d", col*m_params.numCamsX + row);
         return;
